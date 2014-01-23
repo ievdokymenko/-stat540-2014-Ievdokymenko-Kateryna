@@ -1,0 +1,117 @@
+install.packages("ggplot2")
+library(ggplot2)
+
+#get names all function names which start with geom_
+apropos("^geom_")
+
+kDat <- read.table("GSE4051_MINI.txt")
+str(kDat)
+table(kDat$devStage, kDat$gType)
+with(kDat, table(devStage, gType))
+with(kDat, table(devStage, gType, sample))
+
+# function for quick plots
+qplot(crabHammer, eggBomb, data = kDat)
+
+p <- ggplot(kDat, aes(x = crabHammer, y = eggBomb))
+
+str(p)
+
+# add geometric layer
+(p  <- p + geom_point())
+
+(p <- p + stat_smooth(se=FALSE))
+
+#change background, the axis labels and the title
+(p <- p + theme_classic() + xlab("Expression of crabHammer") + ylab("Expression of eggBomb") + ggtitle("Scatterplot for expression levels"))
+
+#reshape the data (poisonFang and eggBomb against crabHammer)
+nDat <- with(kDat,data.frame(sample, devStage, gType, crabHammer, probeset = factor(rep(c("eggBomb", "poisonFang"),
+each = nrow(kDat))), geneExp = c(eggBomb, poisonFang))) 
+
+head(nDat)
+
+str(nDat)
+
+rep(c(1,2), each=3)
+
+with(kDat, c(eggBomb, poisonFang))
+
+
+(p <- ggplot(nDat, aes(crabHammer, geneExp)) +
+geom_point(color = probeset))
+str(nDat)
+(p <- ggplot(nDat, aes(crabHammer, geneExp)) +
+geom_point(color = probeset, data=nDat))
+
+#plot the data, specify 2 probes by different colours 
+(p <- ggplot(nDat, aes(crabHammer, geneExp, color = probeset)) +
+geom_point())
+
+# add smoothing lines for 2 genes
+(p <- ggplot(nDat, aes(crabHammer, geneExp, color = probeset)) +
+geom_point() +
+stat_smooth(se = F))
+
+# add one smoothing line for 2 genes
+(p <- ggplot(nDat, aes(crabHammer, geneExp, color = probeset)) +
+geom_point() +
+stat_smooth(se = F, aes(group = 1)))
+
+# facetting= plot in separated panels
+(p <- ggplot(nDat, aes(crabHammer, geneExp)) + geom_point() + facet_wrap(~ probeset))
+
+ # in 2 paneles distinguish different gTypes(wt and Nrl)
+p  <- ggplot(nDat, aes(crabHammer, geneExp, color=gType)) + geom_point() + facet_wrap( ~ probeset)
+
+p
+
+# reshape the dataset so probeset will be a factor specifiying the gene where are measuring 
+oDat <- with(kDat, data.frame(sample, devStage, gType, probeset = factor(rep(c("crabHammer", "eggBomb", "poisonFang"), each = nrow(kDat))), geneExp = c(crabHammer, eggBomb, poisonFang)))
+
+# plot the expression level of each gene 
+(p <- ggplot(oDat, aes(geneExp, probeset)) + 
+   geom_point())
+   
+# add jitter
+(p <- ggplot(oDat, aes(geneExp, probeset)) + 
++      geom_point(position = position_jitter(height = 0.1)))
+
+
+# explore gene expression over the development stage
+> (p <- ggplot(oDat, aes(devStage, geneExp)) + 
++      geom_point())
+
+# separate genes 
+p  <- p + facet_wrap(~ probeset)
+p
+  
+# distinguish by genotype
+p  <- p + aes (color = gType)
+
+# add averages
+p <- p + stat_summary(fun.y = mean, geom = "point", shape = 4, size = 4)
+
+
+#build a density plot
+(p <- ggplot(oDat, aes(geneExp)) +  geom_density())
+(p <- ggplot(oDat, aes(geneExp)) + 
+   stat_density(geom = "line", position = "identity")) 
+   
+   
+# + adding data points at the bottom   
+   (p <- ggplot(oDat, aes(geneExp)) + 
+   stat_density(geom = "line", position = "identity") + 
+   geom_point(aes(y = 0.05), position = position_jitter(height = 0.005)))
+   
+# separate different genotypes
+(p <- p + facet_wrap(~ gType))
+
+# build a boxplot
+(p <- ggplot(oDat, aes(devStage, geneExp)) + 
+   geom_boxplot())
+   
+# separate genotypes
+(p <- p + facet_wrap(~ gType))
+
+
