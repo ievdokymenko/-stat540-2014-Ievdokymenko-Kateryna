@@ -1,4 +1,8 @@
-# Basics of working with R in the Console and RStudio goodies
+Basics of working with R in the Console and RStudio goodies
+
+
+
+
 x <- 3 * 4
 
 x
