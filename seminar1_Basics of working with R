@@ -1,0 +1,38 @@
+# Basics of working with R in the Console and RStudio goodies
+x <- 3 * 4
+
+x
+
+# make regular sequences of numbers
+seq(1:10)
+
+x  <- seq(1:10)
+
+is.vector (x)
+# check your working directory
+getwd()
+
+list.files()
+
+# set variables 
+
+a  <- 5
+b <- -2
+sigSq  <- 0.5
+
+# generate sample from uniform distribution
+x <- runif(50)
+y <- a + b * x + rnorm(40, sd = sqrt(sigSq))
+(avgX <- mean(x))
+
+[1] 0.4933611
+
+write(avgX, "avgX.txt")
+
+plot(x, y)
+
+#add one straight line through the curent plot
+
+abline(a, b, col = "purple")
+
+dev.print(pdf, "toylinePlot.pdf")
