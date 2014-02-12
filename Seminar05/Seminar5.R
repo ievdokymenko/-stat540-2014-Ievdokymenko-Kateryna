@@ -136,3 +136,34 @@ library(plyr)
 makeStripplot(aggr)
 
 # fit linear and quadratic models to the expression data for one or several genes
+library(car)
+mDat <- prepareData("1438786_a_at")
+mDat$age <- recode(mDat$devStage, "'E16'=-2; 'P2'=2; 'P6'=6; 'P10'=10; '4_weeks'=28", as.factor.result = FALSE)
+head(mDat)
+library(lattice)
+# Linear fit
+linFit = lm(formula=gExp~age, data=mDat)
+summary(linFit)
+# draw points and a LOESS fitted regression curve
+# Other possible types: "p", "l", "h", "b", "o", "s", "S", "r", "a", "g", "smooth", "spline"
+# Docs: https://stat.ethz.ch/R-manual/R-devel/library/lattice/html/panel.xyplot.html
+xyplot(gExp ~ age, mDat, type=c("smooth", "p"))
+
+# Quadratic fit
+quadFit = lm(formula=gExp~age + I(age^2), data=mDat)
+summary(quadFit)
+xyplot(gExp ~ age^2, mDat, type=c("smooth", "p"))
+
+# Notice that the 4 week developmental stage generally posed a difficult fitting problem 
+# for the quadratic model where we regressed expression on age. Шt is simply too far
+# separated in time to be easily modelled quantitatively with the other 4 developmental stages. 
+# Let's drop the 4 week data and revisit this dataset with linear and quadratic models.
+(mDatSubset <- subset(mDat, devStage != '4_weeks'))
+mDatSubset$age <- recode(mDatSubset$devStage, "'E16'=-2; 'P2'=2; 'P6'=6; 'P10'=10", as.factor.result = FALSE)
+linFit = lm(formula=gExp~age, data=mDat)
+summary(linFit)
+xyplot(gExp ~ age, mDatSubset, type=c("smooth", "p"))
+
+quadFit = lm(formula=gExp~age + I(age^2), data=mDat)
+summary(quadFit)
+xyplot(gExp ~ age^2, mDatSubset, type=c("smooth", "p"))
