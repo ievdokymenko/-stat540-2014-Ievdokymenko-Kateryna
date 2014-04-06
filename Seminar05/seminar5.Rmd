@@ -1,0 +1,252 @@
+
+
+Seminar 5 
+========================================================
+
+```{r}
+library(lattice) 
+```
+
+
+```{r}
+prDat <- read.table("C:/Users/Kateryna/Documents/RStudio/GSE4051_data.tsv")
+str(prDat, max.level = 0)
+prDes <- readRDS("C:/Users/Kateryna/Documents/RStudio/GSE4051_design.rds")
+str(prDes)
+````
+
+###############
+
+Take the Affymetrix probeset ID(s) as input and create a dataframe
+
+```{r}
+prepareData <- function(keepGenes) {
+  miniDat <- subset(prDat, rownames(prDat) %in% keepGenes)
+  # reshape the data to be tall and skinny
+  miniDat <- data.frame(gExp = as.vector(t(as.matrix(miniDat))),
+                        gene = factor(rep(rownames(miniDat), each = ncol(miniDat)),
+                                      levels = keepGenes))
+  miniDat <- suppressWarnings(data.frame(prDes, miniDat))
+  return(miniDat)
+}
+```
+
+
+Test a function to create a dataset for a small set of genes
+```{r}
+jDat <- prepareData(c("1419655_at","1438815_at"))
+str(jDat)
+head(jDat)
+tail(jDat)
+stripplot(gExp ~ devStage | gene, jDat,
+          group = gType, jitter.data = TRUE,
+          auto.key = TRUE, type = c('p', 'a'), grid = TRUE)
+```
+
+
+###############
+
+A function to stripplot a mini-dataset
+```{r}
+makeStripplot <- function(df) {
+  stripplot(gExp ~ devStage | gene, df,
+            group = gType, jitter.data = TRUE,
+            auto.key = TRUE, type = c('p', 'a'), grid = TRUE)
+}
+```
+
+
+Test the stripplot function
+```{r}
+makeStripplot(jDat)
+makeStripplot(newDat <- prepareData("1456341_a_at"))
+str(newDat)
+head(newDat)
+```
+
+
+###############
+
+Test for a difference in expected gene expression for probeset "1456341_a_at" at developmental stage P2 vs. 4 weeks post-natal (ignoring genotype, i.e. lump the wild types and knockouts together).
+
+
+Assume a common variance in the two groups.
+```{r}
+ttInput <- subset(prepareData("1456341_a_at"), devStage %in% c("P2","4_weeks"))
+t.test(gExp ~ devStage, ttInput)
+```
+
+
+###############
+
+Fit a linear model with a categorical covariate = do "one-way ANOVA". Focus on probeset "1438786_a_at".
+```{r}
+makeStripplot(mDat <- prepareData("1438786_a_at"))
+```
+
+Let's focus just on the wild type data for now. 
+Model expression as a function of the devStage factor.
+```{r}
+mFit <- lm(formula = gExp ~ devStage, data = mDat, subset = gType == "wt")
+summary(mFit)
+```
+
+
+Vet your inferential results: does the intercept look plausible given the plot? How about the devStageP2 effect, etc.?
+_Yes, looks right._
+
+###############
+
+Test whether the P2 and P10 effects are equal or, equivalently, whether their difference is equal to zero.
+Construct the contrast matrix to form the difference between the P2 and P10 effects.
+```{r}
+contMat = matrix(c(0, 1, 0, -1, 0), nrow=1)
+(obsDiff <- contMat %*% coef(mFit))
+```
+
+Check that this really is the observed difference in sample mean for the wild type mice, P2 vs. P10.
+```{r}
+(sampMeans <- aggregate(gExp ~ devStage, mDat, FUN = mean,
+                        subset = gType == "wt"))
+with(sampMeans, gExp[devStage == "P2"] - gExp[devStage == "P10"])
+```
+
+
+Calculate the (estimated) standard error for our contrast. The variance-covariance matrix can be obtained with vcov():
+```{r}
+vcov(mFit)
+```
+
+Let's check that this is really true. If we take the diagonal elements and take their square root, 
+They should be exactly equal to the standard errors reported for out original model.
+```{r}
+summary(mFit)$coefficients[ , "Std. Error"]
+sqrt(diag(vcov(mFit)))
+```
+
+
+A typical matrix of inferential results 
+```{r}
+summary(mFit)$coefficients
+```
+
+
+Variance-covariance matrix of a contrast 
+```{r}
+(estSe <- contMat %*% vcov(mFit) %*% t(contMat))
+```
+
+Form a test statistic as an observed effect divided by its estimated standard error:
+```{r}
+(testStat <- obsDiff/estSe)
+```
+
+
+Compute a two-sided p-value 
+```{r}
+2 * pt(abs(testStat), df = df.residual(mFit), lower.tail = FALSE)
+```
+
+Not surprisingly, this p-value is rather large and we conclude there is no difference.
+
+##################
+Fit a linear model with two categorical covariates
+
+Focus on probeset "1448690_at"
+```{r}
+makeStripplot(oDat <- prepareData("1448690_at"))
+str(oDat)
+```
+
+
+Fit a linear model with covariates gType and devStage and include their interactions.
+```{r}
+oFitBig <- lm(formula = gExp ~ gType * devStage, data=oDat)
+summary(oFitBig)$coef
+```
+Vet the results. Is the intercept plausible? How about the various effects? Do the ones with small p-values, e.g. meeting a conventional cut-off of 0.05, look 'real' to you?
+_Intercept and effects seem reasonable_
+
+Fit a related, smaller model with the same covariates, but this time omit the interaction.
+```{r}
+oFitSmall <- lm(formula = gExp ~ gType + devStage, data=oDat)
+```
+
+Let's determine if the interaction terms are truly necessary. Recall the anova() function can take two fitted models, 
+one nested within the other, and perform this test.
+```{R}
+anova(oFitSmall, oFitBig)
+```
+
+With a p-value very close to one, we confirm that there is no evidence for interaction in this particular case.
+
+Looking at a more interesting gene
+```{r}
+makeStripplot(oDat2 <- prepareData("1429225_at"))
+oFitBig2 <- lm(formula = gExp ~ gType * devStage, data=oDat2)
+oFitSmall2 <- lm(formula = gExp ~ gType + devStage, data=oDat2)
+anova(oFitSmall2, oFitBig2)
+```
+
+The interaction here is highly statistically significant.
+
+################
+Further work
+use data aggregation strategies from last week to do some of the same work for small sets of genes
+```{r}
+genes = c("1419655_at","1438815_at")
+jDat <- prepareData(genes)
+library(plyr)
+(aggr <- ddply(jDat, ~ sidChar + devStage + gType, summarize, gExp = mean(gExp), gene = paste(genes, collapse=' & ')))
+makeStripplot(aggr)
+```
+
+
+Fit linear and quadratic models to the expression data for one or several genes
+```{r}
+library(car)
+mDat <- prepareData("1438786_a_at")
+mDat$age <- recode(mDat$devStage, "'E16'=-2; 'P2'=2; 'P6'=6; 'P10'=10; '4_weeks'=28", as.factor.result = FALSE)
+head(mDat)
+library(lattice)
+```
+
+Linear fit
+```{r}
+linFit = lm(formula=gExp~age, data=mDat)
+summary(linFit)
+```
+
+Draw points and a LOESS fitted regression curve. Other possible types: "p", "l", "h", "b", "o", "s", "S", "r", "a", "g", "smooth", "spline"
+Docs: https://stat.ethz.ch/R-manual/R-devel/library/lattice/html/panel.xyplot.html
+```{r}
+xyplot(gExp ~ age, mDat, type=c("smooth", "p"))
+```
+
+
+Quadratic fit
+```{r}
+quadFit = lm(formula=gExp~age + I(age^2), data=mDat)
+summary(quadFit)
+xyplot(gExp ~ age^2, mDat, type=c("smooth", "p"))
+``` 
+
+4 week developmental stage generally posed a difficult fitting problem for the quadratic model where we regressed expression on age. Шt is simply too far separated in time to be easily modelled quantitatively with the other 4 developmental stages.
+
+
+Let's drop the 4 week data and revisit this dataset with linear and quadratic models.
+```{r}
+(mDatSubset <- subset(mDat, devStage != '4_weeks'))
+mDatSubset$age <- recode(mDatSubset$devStage, "'E16'=-2; 'P2'=2; 'P6'=6; 'P10'=10", as.factor.result = FALSE)
+linFit = lm(formula=gExp~age, data=mDat)
+summary(linFit)
+xyplot(gExp ~ age, mDatSubset, type=c("smooth", "p"))
+```
+
+```{r}
+quadFit = lm(formula=gExp~age + I(age^2), data=mDat)
+summary(quadFit)
+xyplot(gExp ~ age^2, mDatSubset, type=c("smooth", "p"))
+```
+
+

@@ -1,0 +1,160 @@
+Seminar 07
+========================================================
+
+Load data
+```{r}
+setwd("C:/Users/Kateryna/Documents/RStudio")
+dat <- read.table("bottomly_count_table.tsv", header = TRUE, row.names = 1)
+des <- read.table("bottomly_phenodata.tsv", header = TRUE, row.names = 1)
+```
+
+```{r}
+library(edgeR)
+```
+
+Create a 'group' object describing which group each sample belongs to:
+```{r}
+group <- factor(c(rep("1", 10), rep("2", 11)))
+```
+
+This produces an object of type DGEList with can be manipulated in a similar way to any other list object in R
+```{r}
+dge.glm <- DGEList(counts = dat, group = group)
+nrow(dge.glm[[1]])
+ncol(dge.glm[[1]])
+
+design <- model.matrix(~group)
+dge.glm.com.disp <- estimateGLMCommonDisp(dge.glm, design, verbose = TRUE)
+dge.glm.trend.disp <- estimateGLMTrendedDisp(dge.glm.com.disp)
+dge.glm.tag.disp <- estimateGLMTagwiseDisp(dge.glm.trend.disp, design)
+```
+
+Plot the tagwise dispersion against log2-CPM (counts per million)
+```{r}
+plotBCV(dge.glm.tag.disp)
+
+fit <- glmFit(dge.glm.tag.disp, design)
+
+lrt <- glmLRT(fit, coef = 2)
+
+tt.glm <- topTags(lrt, n = Inf)
+
+interestingSamples <- rownames(tt.glm$table[tt.glm$table$FDR < 1e-50, ])
+cpm(dge.glm.tag.disp)[interestingSamples, ]
+
+summary(de.glm <- decideTestsDGE(lrt, p = 0.05, adjust = "BH"))
+```
+
+Plotting the tagwise log fold changes against log-cpm
+```{r}
+tags.glm <- rownames(dge.glm.tag.disp)[as.logical(de.glm)]
+plotSmear(lrt, de.tags = tags.glm)
+abline(h = c(-2, 2), col = "blue")
+```
+
+Exercises
+Filter the data and remove any gene that has count equal to zero across all samples 
+```{r}
+dge.glm.clean1 <- DGEList(counts = dat, group = group, remove.zeros=T)
+str(dge.glm.clean1)
+```
+
+Filter the data and remove any gene that has count equal to zero in at least one sample in each genotype group
+```{r}
+dge.glm.clean2.toremove <- apply(dge.glm, 1, function(x) {
+  return(any(x[1:10] == 0) & any(x[11:21] == 0))
+})
+dge.glm.clean2.indices <- which(dge.glm.clean2.toremove != T)
+dge.glm.clean2 <- dge.glm[dge.glm.clean2.indices, ]
+str(dge.glm.clean2)
+```
+
+DESeq
+the differential expression analysis of the same dataset using DESeq.
+```{r}
+library(DESeq)
+```
+
+Reading in the same count table data and grouping information
+```{r}
+deSeqDat <- newCountDataSet(dat, group)
+head(counts(deSeqDat))
+```
+
+Estimate the size factors to account for differences in library coverage and estimate the variance:
+```{r}
+deSeqDat <- estimateSizeFactors(deSeqDat)
+sizeFactors(deSeqDat)
+
+deSeqDat <- estimateDispersions(deSeqDat)
+```
+
+Plotting the estimated dispersions against the mean normalized counts
+```{r}
+plotDispEsts(deSeqDat)
+```
+
+Fit the model and examine the results
+```{r}
+results.DESeq <- nbinomTest(deSeqDat, levels(group)[1], levels(group)[2])
+str(results.DESeq)
+plotMA(results.DESeq)
+```
+
+Voom & limma
+```{r}
+library(limma)
+norm.factor <- calcNormFactors(dat)
+dat.voomed <- voom(dat, design, plot = TRUE, lib.size = colSums(dat) * norm.factor)
+dat.voomed
+
+fit <- lmFit(dat.voomed, design)
+fit <- eBayes(fit)
+topTable(fit)
+```
+
+Exercise
+Choose a specific threshold for the adjusted p value, find the genes identified 
+as differentially expressed using each of edgeR, DESeq and voom+limma. 
+Compare the number of genes in these 3 lists, and draw a venn digram demonstrating
+the overlap (if any!).
+
+```{r}
+results.edgeR <- tt.glm$table
+results.voom <- topTable(fit, coef = 2, adj = "BH", n = Inf)
+
+limit <- 0.01
+top.edgeR <- results.edgeR[which(results.edgeR$FDR < limit), ]
+top.DESeq <- results.DESeq[which(results.DESeq$padj < limit), ]
+top.voom <- results.voom[which(results.voom$adj.P.Val < limit), ]
+
+gnames <- rownames(dat)
+```
+
+Filter out indices of top genes
+```{r}
+dat.indices.edgeR <- which(gnames %in% rownames(top.edgeR))
+dat.indices.DESeq <- which(gnames %in% top.DESeq$id)
+dat.indices.voom <- which(gnames %in% rownames(top.voom))
+```
+
+Prepare count lists
+```{r}
+counts.edgeR <- rep(0, length(gnames))
+counts.DESeq <- rep(0, length(gnames))
+counts.voom <- rep(0, length(gnames))
+```
+
+Fill count lists
+```{r}
+counts.edgeR[dat.indices.edgeR] <- 1
+counts.DESeq[dat.indices.DESeq] <- 1
+counts.voom[dat.indices.voom] <- 1
+
+venn.df <- data.frame(edgeR = counts.edgeR, 
+                      DESeq = counts.DESeq, 
+                      voom = counts.voom, 
+                      row.names = gnames)
+venn.counts <- vennCounts(venn.df)
+vennDiagram(venn.counts)
+```
